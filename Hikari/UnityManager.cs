@@ -27,7 +27,7 @@ namespace HikariThreading
         /// </summary>
         internal override void UnsafeUpdate ( )
         {
-            UnsafeRequeueAwakanedTasks();
+            UnsafeRequeueAwakenedTasks();
 
             // Run the tasks, up to our maximum per update.
             for ( int i = 0; i != maxTasksInAFrame; i++ )
@@ -41,9 +41,9 @@ namespace HikariThreading
                     t = waiting.Dequeue();
                 }
 
-                t.Start();
+                bool now_napping = t.Start();
                 // If it's napping, push it to the napping group.
-                if ( t.IsNapping )
+                if ( now_napping )
                     napping.Add(t);
             }
         }

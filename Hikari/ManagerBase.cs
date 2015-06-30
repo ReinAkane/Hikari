@@ -23,6 +23,8 @@ namespace HikariThreading
         protected Queue<ITask> waiting;
         /// <summary>
         /// List of napping Tasks.
+        /// 
+        /// Should only be accessed in UnsafeUpdate.
         /// </summary>
         protected List<ITask> napping;
 
@@ -48,12 +50,12 @@ namespace HikariThreading
         internal abstract void UnsafeUpdate ( );
 
         /// <summary>
-        /// Checks all napping tasks and Enquques the awakened ones.
-        /// This is not threadsafe around the napping list.
+        /// Checks all napping tasks and Enqueues the awakened ones.
+        /// This is not threadsafe in regard to napping list.
         /// </summary>
-        protected void UnsafeRequeueAwakanedTasks()
+        protected void UnsafeRequeueAwakenedTasks()
         {
-            // Check out nappers and pull any awakened ones to waiting
+            // Inspect nappers and pull any awakened ones to waiting
             List<ITask> not_napping = new List<ITask>();
             foreach ( ITask t in napping )
             {

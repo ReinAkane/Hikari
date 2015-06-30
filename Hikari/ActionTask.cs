@@ -16,17 +16,18 @@ namespace HikariThreading
     public class ActionTask : TaskBase<Action<ActionTask>>
     {
         /// <summary>
-        /// Continue the task with this in whatever thread this Task was run.
+        /// Continue the task with these in whatever thread this Task was run.
         /// </summary>
         Queue<Action<ActionTask>> extensions;
 
         /// <summary>
-        /// Creates a new task with the passed action as the task to run.
+        /// Creates a new Task with the passed action as the task to run.
         /// </summary>
         /// <param name="task">The task to run.</param>
         /// <param name="unity">Whether this Task will execute on Unity's thread.</param>
-        public ActionTask ( Action<ActionTask> task, bool unity )
-            : base(unity)
+        /// <param name="cancel_extensions_on_abort">Whether or not it will automatically cancel all extensions when the Task is aborted.</param>
+        public ActionTask ( Action<ActionTask> task, bool unity, bool cancel_extensions_on_abort )
+            : base(unity, cancel_extensions_on_abort)
         {
             extensions = new Queue<Action<ActionTask>>();
             extensions.Enqueue(task);
@@ -36,7 +37,7 @@ namespace HikariThreading
         /// Runs the task and all extensions.
         /// Stops running extensions while Napping.
         /// </summary>
-        protected override void StartTask ( )
+        protected override bool StartTask ( )
         {
             while ( !IsNapping )
             {
@@ -46,13 +47,15 @@ namespace HikariThreading
                 {
                     // Guess we're done!
                     if ( extensions.Count <= 0 )
-                        break;
+                        return false;
                     current = extensions.Dequeue();
                 }
                 // Make sure we aren't holding the lock while running the action,
                 // as the action may change states in this Task.
                 current(this);
             }
+
+            return true;
         }
 
         /// <summary>

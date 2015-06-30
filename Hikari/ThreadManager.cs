@@ -17,7 +17,7 @@ namespace HikariThreading
         /// <summary>
         /// The addition times of all Tasks in the waiting queue.
         /// </summary>
-        Queue<DateTime> waitingBirths;
+        Queue<DateTime> waitingSpawns;
 
         /// <summary>
         /// Lock for the threads list.
@@ -76,10 +76,10 @@ namespace HikariThreading
         /// <summary>
         /// The last time a Thread was spawned.
         /// </summary>
-        DateTime lastThreadBirth;
+        DateTime lastThreadSpawn;
 
         /// <summary>
-        /// The last time a Thread had nothing to do.
+        /// The last time no Threads had nothing to do.
         /// </summary>
         DateTime lastNoBoredThreads;
 
@@ -90,7 +90,7 @@ namespace HikariThreading
         internal ThreadManager ( )
             : base()
         {
-            waitingBirths = new Queue<DateTime>();
+            waitingSpawns = new Queue<DateTime>();
             threads = new List<Thread>();
             dedicatedThreads = new List<Thread>();
             threadLock = new object();
@@ -102,7 +102,7 @@ namespace HikariThreading
             minThreads = Environment.ProcessorCount - 1;
 #endif
             numThreads = 0;
-            lastThreadBirth = DateTime.Now;
+            lastThreadSpawn = DateTime.Now;
             lastNoBoredThreads = DateTime.Now;
 
             for ( int i = 0; i < minThreads; i++ )
@@ -116,7 +116,7 @@ namespace HikariThreading
         internal override void UnsafeUpdate ( )
         {
             // Check out nappers and pull any awakened ones to waiting
-            UnsafeRequeueAwakanedTasks();
+            UnsafeRequeueAwakenedTasks();
 
             // Check if any dedicated threads are done. If so, add them to the pool.
             HandleDedicatedThreads();
@@ -155,9 +155,9 @@ namespace HikariThreading
                     dedicatedThreads.Remove(t);
                     threads.Add(t);
                     numThreads++;
-                    // Treat it as a thread birth since it is essentially a new
+                    // Treat it as a thread spawn since it is essentially a new
                     // thread for the manager.
-                    lastThreadBirth = DateTime.Now;
+                    lastThreadSpawn = DateTime.Now;
                 }
             }
         }
@@ -167,28 +167,28 @@ namespace HikariThreading
         /// </summary>
         private void UnsafeHandleThreads ( )
         {
-            List<Thread> boredThreads = new List<Thread>();
+            List<Thread> bored_threads = new List<Thread>();
 
             // Get our bored and napping threads
             lock ( threadLock )
             {
-                foreach ( Thread t in threads )
+                foreach ( Thread thread in threads )
                 {
-                    if ( !t.Running )
-                        boredThreads.Add(t);
-                    else if ( t.Napping )
+                    if ( !thread.Running )
+                        bored_threads.Add(thread);
+                    else if ( thread.Napping )
                     {
-                        boredThreads.Add(t);
-                        napping.Add(t.PullNapper());
+                        bored_threads.Add(thread);
+                        napping.Add(thread.PullNapper());
                     }
                 }
             }
 
-            int bored = boredThreads.Count;
+            int num_bored = bored_threads.Count;
             // Give em work
-            foreach ( Thread t in boredThreads )
+            foreach ( Thread thread in bored_threads )
             {
-                ITask job;
+                ITask task;
 
                 // Grab the Task inside the lock so we don't fuck up,
                 // then start the task outside in case the... actually I dunno why.
@@ -199,15 +199,15 @@ namespace HikariThreading
                     // If we're outta work, stop
                     if ( waiting.Count <= 0 )
                         break;
-                    job = waiting.Dequeue();
-                    waitingBirths.Dequeue();
+                    task = waiting.Dequeue();
+                    waitingSpawns.Dequeue();
                 }
 
-                t.StartTask(job);
-                bored--;
+                thread.StartTask(task);
+                num_bored--;
             }
 
-            if ( bored == 0 )
+            if ( num_bored == 0 )
                 lastNoBoredThreads = DateTime.Now;
         }
 
@@ -222,20 +222,20 @@ namespace HikariThreading
             lock ( workLock )
             {
                 waiting.Enqueue(task);
-                waitingBirths.Enqueue(DateTime.Now);
+                waitingSpawns.Enqueue(DateTime.Now);
             }
         }
 
         /// <summary>
         /// Spawns a new thread and adds it to the thread pool.
         /// </summary>
-        internal void SpawnThread ( )
+        private void SpawnThread ( )
         {
-            lastThreadBirth = DateTime.Now;
+            lastThreadSpawn = DateTime.Now;
             numThreads++;
             System.Threading.Thread sys_thread = new System.Threading.Thread(( ) =>
                 {
-                    Thread t = Thread.Spool();
+                    Thread t = new Thread();
                     lock ( threadLock ) threads.Add(t);
                     t.StartThread();
                 });
@@ -252,7 +252,7 @@ namespace HikariThreading
         {
             System.Threading.Thread sys_thread = new System.Threading.Thread(( ) =>
                 {
-                    Thread t = Thread.Spool();
+                    Thread t = new Thread();
                     lock ( threadLock ) dedicatedThreads.Add(t);
                     t.StartTask(task);
                     t.StartThread();
@@ -272,7 +272,7 @@ namespace HikariThreading
                 return false;
 
             // No spawning if it was recent!
-            if ( DateTime.Now - lastThreadBirth < minMsBetweenThreadSpawn )
+            if ( DateTime.Now - lastThreadSpawn < minMsBetweenThreadSpawn )
                 return false;
 
             // Don't make one if there's no work.
@@ -282,7 +282,7 @@ namespace HikariThreading
             // Alright now we can spawn a thread if the queue length is high enough
             // or if the next thing in the queue has been waiting long enough.
             if ( waiting.Count >= maxQueueLengthBeforeNewThread ||
-                DateTime.Now - waitingBirths.Peek() > maxQueueAgeInMsBeforeNewThread )
+                DateTime.Now - waitingSpawns.Peek() > maxQueueAgeInMsBeforeNewThread )
             {
                 SpawnThread();
                 return true;
@@ -323,8 +323,8 @@ namespace HikariThreading
 #endif
 
             // Look for a bored one to despawn.
-            // Start at the back to despawn new ones first because...
-            // I dunno I just feel like it.
+            // Start at the back to despawn new ones first (might have very
+            // slight performance benefit).
             for ( int i = threads.Count - 1; i >= 0; i-- )
             {
                 // Found one!

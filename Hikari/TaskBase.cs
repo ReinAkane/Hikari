@@ -13,7 +13,7 @@ namespace HikariThreading
     /// 
     /// TaskBase is threadsafe.
     /// </summary>
-    /// <typeparam name="T">A delegate representing the type of method this Task accepts.</typeparam>
+    /// <typeparam name="T">The object that acts as an action in this Task.</typeparam>
     /// When modifying TaskBase keep in mind that every public method must be
     /// thread safe! I recommend using _lock for your lock to avoid deadlocks.
     /// Child classes also use _lock.
@@ -29,10 +29,6 @@ namespace HikariThreading
         /// Whether or not the current task has completed.
         /// </summary>
         protected volatile bool isCompleted;
-        /// <summary>
-        /// Whether or not the task has started yet.
-        /// </summary>
-        protected volatile bool started;
         /// <summary>
         /// Whether or not the task has been aborted.
         /// </summary>
@@ -51,7 +47,7 @@ namespace HikariThreading
         /// <summary>
         /// Whether or not extensions should be automatically cancelled on abort.
         /// </summary>
-        protected bool cancelExtensionsOnAbort;
+        protected volatile bool cancelExtensionsOnAbort;
 
         /// <summary>
         /// Returns true if the task is known to be on Unity's thread.
@@ -82,32 +78,19 @@ namespace HikariThreading
         /// 
         /// Default is false.
         /// </summary>
-        public bool CancelExtensionsOnAbort
-        {
-            get
-            {
-                bool cancel;
-                lock ( _lock ) cancel = cancelExtensionsOnAbort;
-                return cancel;
-            }
-            set
-            {
-                lock ( _lock ) cancelExtensionsOnAbort = value;
-            }
-        }
+        public bool CancelExtensionsOnAbort { get { return cancelExtensionsOnAbort; } }
 
         /// <summary>
         /// Creates a new task with the passed action as the task to run.
         /// </summary>
         /// <param name="unity">Whether this Task will execute on Unity's thread.</param>
-        public TaskBase ( bool unity )
+        internal TaskBase ( bool unity, bool cancel_extensions_on_abort )
         {
             _lock = new object();
             isCompleted = false;
-            started = false;
             aborted = false;
             napping = false;
-            cancelExtensionsOnAbort = false;
+            cancelExtensionsOnAbort = cancel_extensions_on_abort;
             onUnityThread = unity;
         }
 
@@ -115,35 +98,24 @@ namespace HikariThreading
         /// <summary>
         /// Starts this task!
         /// </summary>
-        void ITask.Start ( )
+        bool ITask.Start ( )
         {
-            // Ensure that we haven't started this before, and that we have
-            // something to do.
-            bool can_start = true;
-            lock(_lock)
-            {
-                if ( started || aborted )
-                    can_start = false;
-                started = true;
-            }
-            if ( !can_start )
-                throw new CannotStartException("Cannot start the task because was already started.");
-
             // Run the task
-            StartTask();
+            bool now_napping = StartTask();
 
             // Notify Hikari of completion.
-            if ( !IsNapping )
+            if ( !now_napping )
                 isCompleted = true;
-            else
-                started = false;
+
+            return now_napping;
         }
 
         /// <summary>
         /// This needs to actually start the task at hand.
         /// This must manage any and all extensions.
         /// </summary>
-        protected abstract void StartTask ( );
+        /// <returns>True if the Task is now napping.</returns>
+        protected abstract bool StartTask ( );
 
         /// <summary>
         /// Aborts the task. Note that it cannot stop the current action,
@@ -161,6 +133,8 @@ namespace HikariThreading
 
         /// <summary>
         /// Cancels all extensions. Does not abort.
+        /// 
+        /// This is already locked.
         /// </summary>
         public abstract void CancelExtensions ( );
 
@@ -175,9 +149,9 @@ namespace HikariThreading
         /// <returns>Whether or not the task was successfully extended.</returns>
         public bool Extend ( T next )
         {
-            lock (_lock)
+            lock ( _lock )
             {
-                if (!isCompleted && !aborted)
+                if ( !isCompleted && !aborted )
                 {
                     InternalExtend(next);
                     return true;
@@ -203,7 +177,7 @@ namespace HikariThreading
         /// </summary>
         public virtual bool IsNapping
         {
-            get { lock(_lock) return napping; }
+            get { lock ( _lock ) return napping; }
             set { lock ( _lock ) napping = value; }
         }
     }

@@ -14,8 +14,10 @@ namespace HikariThreading
     {
         /// <summary>
         /// Starts the Task.
+        /// 
+        /// Returns whether or not its napping.
         /// </summary>
-        void Start ( );
+        bool Start ( );
 
         /// <summary>
         /// Returns true if the Task is completed in its entirety.

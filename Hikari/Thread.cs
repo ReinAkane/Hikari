@@ -15,7 +15,7 @@ namespace HikariThreading
         Thread master;
 
         // This is the task that is running on this thread.
-        ITask task;
+        ITask task = null;
 
         // Our lock for the thread.
         object _lock;
@@ -40,14 +40,7 @@ namespace HikariThreading
         /// Throws MultipleThreadClassesOnThread if there was already a Thread
         /// created for this thread.
         /// </summary>
-        /// <returns></returns>
-        internal static Thread Spool ( )
-        {
-            Thread t = new Thread();
-            return t;
-        }
-
-        private Thread ( )
+        internal Thread ( )
         {
             if ( null != master )
                 throw new MultipleThreadClassesOnThread();
@@ -94,10 +87,10 @@ namespace HikariThreading
                 // Run the task!
                 if ( Running && !Napping )
                 {
-                    task.Start();
+                    bool now_napping = task.Start();
 
                     // Hold on to it if its napping, the ThreadManager will pull it off.
-                    if (!task.IsNapping)
+                    if ( !now_napping )
                         lock(_lock) task = null;
                 }
 

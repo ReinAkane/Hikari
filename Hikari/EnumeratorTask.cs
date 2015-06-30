@@ -38,7 +38,8 @@ namespace HikariThreading
         /// </summary>
         ITask napUntilComplete = null;
 
-        internal EnumeratorTask(IEnumerator action, bool unity) : base(unity)
+        internal EnumeratorTask ( IEnumerator action, bool unity, bool cancel_extensions_on_abort )
+            : base(unity, cancel_extensions_on_abort)
         {
             extensions = new System.Collections.Generic.Queue<IEnumerator>();
             extensions.Enqueue(action);
@@ -48,10 +49,9 @@ namespace HikariThreading
         /// Actually runs the enumerator.
         /// Pauses the enumerator and does not extend while napping.
         /// </summary>
-        protected override void StartTask ( )
+        protected override bool StartTask ( )
         {
-            bool more = true;
-            while ( !IsNapping && more )
+            while ( !IsNapping )
             {
                 IEnumerator current;
 
@@ -62,7 +62,7 @@ namespace HikariThreading
                     {
                         // Nothing to dooo~
                         if ( extensions.Count <= 0 )
-                            break;
+                            return false;
                         this.current = extensions.Dequeue();
                     }
 
@@ -78,36 +78,47 @@ namespace HikariThreading
                     continue;
                 }
                 object current_result = current.Current;
-               
+
                 // Looks like they're asking for a nap.
                 if ( current_result != null ) HandleYield(current_result);
             }
+
+            return true;
         }
 
         /// <summary>
         /// Thrown when an EnumeratorTask got a yielded object that it couldn't
         /// handle.
         /// </summary>
-        public class CouldNotHandleYieldException : Exception 
+        public class CouldNotHandleYieldException : Exception
         {
             internal CouldNotHandleYieldException ( string msg ) : base(msg) { }
+        }
+        public class CannotWaitForSelfException : Exception
+        {
+            internal CannotWaitForSelfException ( string msg ) : base(msg) { }
         }
         /// <summary>
         /// Handles the return statement in a yield, putting the task to sleep
         /// for some amount of time.
         /// </summary>
         /// <param name="result">The object returned.</param>
-        private void HandleYield(object result)
+        private void HandleYield ( object result )
         {
             ITask task = result as ITask;
-            if (task != null)
+            if ( task != null )
             {
-                lock (_lock)
+                // Make sure they don't wait for themselves
+                if ( task == this ) throw new CannotWaitForSelfException("A Task cannot wait for itself to finish.");
+                
+                lock ( _lock )
                     napUntilComplete = task;
                 return;
             }
 
-            throw new CouldNotHandleYieldException("Could not handle yielded object " + result.ToString() + " of type " + result.GetType().Name);
+            // Add expected classes
+            throw new CouldNotHandleYieldException("Could not handle yielded object " + result.ToString() + " of type " + result.GetType().Name +
+                ".\nYou can yield null, or a TaskBase object.");
         }
 
         /// <summary>
@@ -116,7 +127,7 @@ namespace HikariThreading
         /// </summary>
         public override void CancelExtensions ( )
         {
-            lock (_lock)
+            lock ( _lock )
             {
                 current = null;
                 extensions.Clear();
@@ -135,6 +146,10 @@ namespace HikariThreading
 
         /// <summary>
         /// Override to allow waiting for tasks.
+        /// 
+        /// Setting this to false while the task is waiting for another task
+        /// will not awaken the task until the other task has completed. use
+        /// ForceAwaken() for those situations.
         /// </summary>
         public override bool IsNapping
         {
@@ -142,13 +157,23 @@ namespace HikariThreading
             {
                 bool waiting = false;
                 lock ( _lock ) waiting = (napUntilComplete != null && !napUntilComplete.IsCompleted);
-                return base.IsNapping || waiting;
+                return waiting || base.IsNapping;
             }
             set
             {
                 base.IsNapping = value;
-                lock ( _lock ) napUntilComplete = null;
+                
             }
+        }
+
+        /// <summary>
+        /// Forces the Task awake, even if it was waiting for another Task to
+        /// finish.
+        /// </summary>
+        public void ForceAwaken()
+        {
+            lock ( _lock ) napUntilComplete = null;
+            IsNapping = false;
         }
     }
 }
