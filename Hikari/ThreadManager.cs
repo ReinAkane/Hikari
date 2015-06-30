@@ -310,9 +310,16 @@ namespace HikariThreading
             numThreads++;
             System.Threading.Thread sys_thread = new System.Threading.Thread(( ) =>
                 {
-                    Thread t = new Thread();
-                    lock ( threadLock ) threads.Add(t);
-                    t.StartThread();
+                    try
+                    {
+                        Thread t = new Thread();
+                        lock ( threadLock ) threads.Add(t);
+                        t.StartThread();
+                    }
+                    catch ( Exception e )
+                    {
+                        Hikari.ScheduleUnity(( _ ) => { throw e; });
+                    }
                 });
             sys_thread.IsBackground = true;
             sys_thread.Start();
@@ -327,10 +334,17 @@ namespace HikariThreading
         {
             System.Threading.Thread sys_thread = new System.Threading.Thread(( ) =>
                 {
-                    Thread t = new Thread();
-                    lock ( threadLock ) dedicatedThreads.Add(t);
-                    t.StartTask(task);
-                    t.StartThread();
+                    try
+                    {
+                        Thread t = new Thread();
+                        lock ( threadLock ) dedicatedThreads.Add(t);
+                        t.StartTask(task);
+                        t.StartThread();
+                    }
+                    catch ( Exception e )
+                    {
+                        Hikari.ScheduleUnity(( _ ) => { throw e; });
+                    }
                 });
             sys_thread.IsBackground = true;
             sys_thread.Start();

@@ -7,7 +7,9 @@ namespace HikariTests
     [TestClass]
     public class HikariTestClass
     {
-        System.Collections.IEnumerator EnumTask()
+        class ExpectedException : Exception { }
+
+        System.Collections.IEnumerator EnumTask ( )
         {
             yield return null;
         }
@@ -80,7 +82,7 @@ namespace HikariTests
         }
 
         [TestMethod]
-        public void FlagsWorkForEnumerators()
+        public void FlagsWorkForEnumerators ( )
         {
             EnumeratorTask task = Hikari.ScheduleUnity(EnumTask());
             Assert.IsTrue(task.OnUnityThread, "Unity flag not set.");
@@ -96,7 +98,7 @@ namespace HikariTests
         }
 
         [TestMethod]
-        public void TasksRequeueOnExtensionCorrectly()
+        public void TasksRequeueOnExtensionCorrectly ( )
         {
             int i = 0;
             ActionTask task = Hikari.ScheduleUnity(( _ ) =>
@@ -129,6 +131,66 @@ namespace HikariTests
 
             Assert.AreEqual(4, i, "Task didn't run correctly when extended after runtime.");
             Assert.IsTrue(task.IsCompleted, "Task did not report completion.");
+        }
+
+        [TestMethod]
+        public void ExceptionsAreSentToUnity ( )
+        {
+            ActionTask task = Hikari.Schedule(( _ ) =>
+            {
+                throw new ExpectedException();
+            });
+
+            Hikari.Instance.Update();
+
+            for ( int ms = 0; ms < 10000; ms += 1 )
+            {
+                System.Threading.Thread.Sleep(1);
+                if ( task.Failed )
+                    break;
+            }
+
+            Assert.IsFalse(task.IsCompleted, "Task thinks it completed.");
+            Assert.IsTrue(task.Failed, "Task doesn't think it failed.");
+
+            bool exception_thrown = false;
+            try
+            {
+                Hikari.Instance.Update();
+            }
+            catch ( ExpectedException )
+            {
+                exception_thrown = true;
+            }
+            Assert.IsTrue(exception_thrown, "Exception not thrown on Unity's thread.");
+        }
+
+        [TestMethod]
+        public void HandledExceptionsAreNotSentToUnity ( )
+        {
+            bool exception_thrown = false;
+            ActionTask task = Hikari.Schedule(( _ ) =>
+            {
+                throw new ExpectedException();
+            });
+
+            task.AddErrorHandler(( _ ) => exception_thrown = true);
+
+            Hikari.Instance.Update();
+
+            for ( int ms = 0; ms < 10000; ms += 1 )
+            {
+                System.Threading.Thread.Sleep(1);
+                if ( task.Failed )
+                    break;
+            }
+
+            Assert.IsFalse(task.IsCompleted, "Task thinks it completed.");
+            Assert.IsTrue(task.Failed, "Task doesn't think it failed.");
+
+            Hikari.Instance.Update();
+
+            Assert.IsTrue(exception_thrown, "Exception not thrown on Unity's thread.");
         }
     }
 }

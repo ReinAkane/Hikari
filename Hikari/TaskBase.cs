@@ -50,9 +50,25 @@ namespace HikariThreading
         protected bool napping;
 
         /// <summary>
+        /// Whether or not this Task errored out.
+        /// </summary>
+        protected volatile bool failed;
+
+        /// <summary>
         /// Whether or not extensions should be automatically cancelled on abort.
         /// </summary>
         protected volatile bool cancelExtensionsOnAbort;
+
+        /// <summary>
+        /// Lock used for interacting with onError.
+        /// </summary>
+        private object errorLock;
+
+        /// <summary>
+        /// Will be called when this errors, on its own thread.
+        /// If this is not set, it will pass the error on to Unity's thread.
+        /// </summary>
+        private Action<Exception> onError;
 
         /// <summary>
         /// Returns true if the task is known to be on Unity's thread.
@@ -91,6 +107,11 @@ namespace HikariThreading
         public bool CancelExtensionsOnAbort { get { return cancelExtensionsOnAbort; } }
 
         /// <summary>
+        /// Returns true if this Task threw an exception during execution.
+        /// </summary>
+        public bool Failed { get { return failed; } }
+
+        /// <summary>
         /// Creates a new task with the passed action as the task to run.
         /// </summary>
         /// <param name="unity">Whether this Task will execute on Unity's thread.</param>
@@ -100,6 +121,8 @@ namespace HikariThreading
             isCompleted = false;
             aborted = false;
             napping = false;
+            failed = false;
+            errorLock = new Object();
             cancelExtensionsOnAbort = cancel_extensions_on_abort;
             onUnityThread = unity;
             isDedicated = is_dedicated;
@@ -114,13 +137,28 @@ namespace HikariThreading
             isCompleted = false;
 
             // Run the task
-            bool now_napping = StartTask();
+            bool now_napping = false;
+            try
+            {
+                now_napping = StartTask();
+            }
+            catch (Exception e)
+            {
+                failed = true;
+
+                lock (errorLock)
+                {
+                    if ( onError != null ) onError(e);
+                    // The ThreadManager will catch this and pass it to Unity.
+                    else throw e;
+                }
+            }
 
             // Notify Hikari of completion.
-            if ( !now_napping )
+            if ( !now_napping && !failed )
                 isCompleted = true;
 
-            return now_napping;
+            return now_napping && !failed;
         }
 
         /// <summary>
@@ -192,6 +230,21 @@ namespace HikariThreading
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Adds a delegate to the onError event.
+        /// This event is called when an error occurs in this Task, on this
+        /// Task's thread.
+        /// 
+        /// If AddErrorHandler is never called, errors will be rethrown in
+        /// Unity's thread.
+        /// </summary>
+        /// <param name="handler">The handler to add to the onError event.</param>
+        public void AddErrorHandler ( Action<Exception> handler )
+        {
+            lock ( errorLock )
+                onError += handler;
         }
 
         /// <summary>
