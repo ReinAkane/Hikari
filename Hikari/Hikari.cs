@@ -35,17 +35,128 @@ namespace HikariThreading
     public class Hikari : UnityEngine.MonoBehaviour
     {
         /// <summary>
-        /// Starts up Hikari. Not necessary to call, but if you don't a
-        /// GameObject will be spawned the first time you call Hikari.
-        /// The spawned GameObject will be set to not destroy on load.
+        /// Starts up Hikari with all the default options. Not
+        /// necessary to call, but if you don't a GameObject will be
+        /// spawned the first time you call Hikari. The spawned
+        /// GameObject will be set to not destroy on load.
+        /// 
+        /// Spawn is not threadsafe.
+        /// </summary>
+        /// <param name="max_tasks_per_frame">The maximum number of Tasks for Hikari to run in Unity per frame.</param>
+        /// <param name="min_threads">The minimum number of Threads for Hikari to have spawned at once.</param>
+        /// <param name="max_threads">The maximum number of Threads for Hikari to have spawned at once. Dedicated Tasks may cause Hikari to go over this maximum.</param>
+        /// <param name="min_ms_between_thread_spawn">The minimum amount of time to wait before spawning a new thread.</param>
+        /// <param name="max_ms_task_waiting_before_thread_spawn">The maximum time that a Task can be waiting in the queue before we spawn a new thread.</param>
+        /// <param name="max_queue_length_before_thread_spawn">The maximum number of Tasks waiting in queue before we spawn a new thread.</param>
+        /// <param name="max_boredom_time_before_thread_despawn">The maximum amount of time a thread can be idle before despawning the thread.</param>
+        /// <returns>The spawned game object for Hikari.</returns>
+        public static UnityEngine.GameObject Spawn ( int max_tasks_per_frame, int min_threads, int max_threads,
+            TimeSpan min_ms_between_thread_spawn, TimeSpan max_ms_task_waiting_before_thread_spawn,
+            uint max_queue_length_before_thread_spawn, TimeSpan max_boredom_time_before_thread_despawn )
+        {
+            UnityEngine.GameObject obj = StartSpawn();
+
+            // Instantiate hikari
+            hikari.threadManager = new ThreadManager(min_threads, max_threads, min_ms_between_thread_spawn,
+                max_ms_task_waiting_before_thread_spawn, max_queue_length_before_thread_spawn,
+                max_boredom_time_before_thread_despawn);
+            hikari.unityManager = new UnityManager(max_tasks_per_frame);
+
+            return obj;
+        }
+
+        /// <summary>
+        /// Starts up Hikari with all the default options. Not
+        /// necessary to call, but if you don't a GameObject will be
+        /// spawned the first time you call Hikari. The spawned
+        /// GameObject will be set to not destroy on load.
+        /// 
+        /// Spawn is not threadsafe.
+        /// </summary>
+        /// <param name="max_tasks_per_frame">The maximum number of Tasks for Hikari to run in Unity per frame.</param>
+        /// <param name="min_threads">The minimum number of Threads for Hikari to have spawned at once.</param>
+        /// <param name="max_threads">The maximum number of Threads for Hikari to have spawned at once. Dedicated Tasks may cause Hikari to go over this maximum.</param>
+        /// <returns>The spawned game object for Hikari.</returns>
+        public static UnityEngine.GameObject Spawn ( int max_tasks_per_frame, int min_threads, int max_threads )
+        {
+            UnityEngine.GameObject obj = StartSpawn();
+
+            // Instantiate hikari
+            hikari.threadManager = new ThreadManager(min_threads, max_threads);
+            hikari.unityManager = new UnityManager(max_tasks_per_frame);
+
+            return obj;
+        }
+
+        /// <summary>
+        /// Starts up Hikari with all the default options. Not
+        /// necessary to call, but if you don't a GameObject will be
+        /// spawned the first time you call Hikari. The spawned
+        /// GameObject will be set to not destroy on load.
+        /// 
+        /// Spawn is not threadsafe.
+        /// </summary>
+        /// <param name="max_tasks_per_frame">The maximum number of Tasks for Hikari to run in Unity per frame.</param>
+        /// <returns>The spawned game object for Hikari.</returns>
+        public static UnityEngine.GameObject Spawn ( int max_tasks_per_frame )
+        {
+            UnityEngine.GameObject obj = StartSpawn();
+
+            // Instantiate hikari
+            hikari.threadManager = new ThreadManager();
+            hikari.unityManager = new UnityManager(max_tasks_per_frame);
+
+            return obj;
+        }
+
+        /// <summary>
+        /// Starts up Hikari with all the default options. Not
+        /// necessary to call, but if you don't a GameObject will be
+        /// spawned the first time you call Hikari. The spawned
+        /// GameObject will be set to not destroy on load.
+        /// 
+        /// Spawn is not threadsafe.
+        /// </summary>
+        /// <param name="min_threads">The minimum number of Threads for Hikari to have spawned at once.</param>
+        /// <param name="max_threads">The maximum number of Threads for Hikari to have spawned at once. Dedicated Tasks may cause Hikari to go over this maximum.</param>
+        /// <returns>The spawned game object for Hikari.</returns>
+        public static UnityEngine.GameObject Spawn ( int min_threads, int max_threads )
+        {
+            UnityEngine.GameObject obj = StartSpawn();
+
+            // Instantiate hikari
+            hikari.threadManager = new ThreadManager(min_threads, max_threads);
+            hikari.unityManager = new UnityManager();
+
+            return obj;
+        }
+
+        /// <summary>
+        /// Starts up Hikari with all the default options. Not
+        /// necessary to call, but if you don't a GameObject will be
+        /// spawned the first time you call Hikari. The spawned
+        /// GameObject will be set to not destroy on load.
         /// 
         /// Spawn is not threadsafe.
         /// </summary>
         /// <returns>The spawned game object for Hikari.</returns>
         public static UnityEngine.GameObject Spawn ( )
         {
-            // Initialize with optional number of threads
+            UnityEngine.GameObject obj = StartSpawn();
 
+            // Instantiate hikari
+            hikari.threadManager = new ThreadManager();
+            hikari.unityManager = new UnityManager();
+
+            return obj;
+        }
+
+        /// <summary>
+        /// This does the reusable parts of the overloaded Spawn() method.
+        /// </summary>
+        /// <returns>The spawned game object for Hikari.</returns>
+        private static UnityEngine.GameObject StartSpawn()
+        {
             // Error if hikari exists
             if ( hikari != null )
                 throw new Exception("Cannot spawn a second Hikari instance.");
@@ -54,10 +165,6 @@ namespace HikariThreading
             UnityEngine.GameObject obj = new UnityEngine.GameObject("Autogenerated_HikariObject");
             DontDestroyOnLoad(obj);
             hikari = obj.AddComponent<Hikari>();
-
-            // Instantiate hikari
-            hikari.threadManager = new ThreadManager();
-            hikari.unityManager = new UnityManager();
 
             return obj;
         }

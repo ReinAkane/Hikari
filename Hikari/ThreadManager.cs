@@ -84,11 +84,89 @@ namespace HikariThreading
         DateTime lastNoBoredThreads;
 
         /// <summary>
-        /// Creates a ThreadManager with the default number of max and min Threads.
-        /// Also spawns minThreads threads.
+        /// Creates a very customized ThreadManager.
+        /// </summary>
+        /// <param name="min_threads">The minimum number of threads to have spawned at any time.</param>
+        /// <param name="max_threads">The maximum number of threads to have spawned in the pool. Dedicated threads may be spawned over the maximum.</param>
+        /// <param name="min_ms_between_thread_spawn">The minimum amount of time to wait before spawning a new thread.</param>
+        /// <param name="max_ms_task_waiting_before_thread_spawn">The maximum time that a Task can be waiting in the queue before we spawn a new thread.</param>
+        /// <param name="max_queue_length_before_thread_spawn">The maximum number of Tasks waiting in queue before we spawn a new thread.</param>
+        /// <param name="max_boredom_time_before_thread_despawn">The maximum amount of time a thread can be idle before despawning the thread.</param>
+        internal ThreadManager ( int min_threads, int max_threads, TimeSpan min_ms_between_thread_spawn,
+            TimeSpan max_ms_task_waiting_before_thread_spawn, uint max_queue_length_before_thread_spawn, 
+            TimeSpan max_boredom_time_before_thread_despawn )
+            : base()
+        {
+            Initialize();
+
+            minThreads = min_threads;
+            maxThreads = max_threads;
+
+            minMsBetweenThreadSpawn = min_ms_between_thread_spawn;
+            maxQueueAgeInMsBeforeNewThread = max_ms_task_waiting_before_thread_spawn;
+            maxQueueLengthBeforeNewThread = max_queue_length_before_thread_spawn;
+            maxBoredomTimeBeforeThreadDespawn = max_boredom_time_before_thread_despawn;
+
+            for ( int i = 0; i < minThreads; i++ )
+                SpawnThread();
+        }
+
+        /// <summary>
+        /// Creates a ThreadManager with customized logic on when to spawn and despawn threads.
+        /// </summary>
+        /// <param name="min_ms_between_thread_spawn">The minimum amount of time to wait before spawning a new thread.</param>
+        /// <param name="max_ms_task_waiting_before_thread_spawn">The maximum time that a Task can be waiting in the queue before we spawn a new thread.</param>
+        /// <param name="max_queue_length_before_thread_spawn">The maximum number of Tasks waiting in queue before we spawn a new thread.</param>
+        /// <param name="max_boredom_time_before_thread_despawn">The maximum amount of time a thread can be idle before despawning the thread.</param>
+        internal ThreadManager ( TimeSpan min_ms_between_thread_spawn,
+            TimeSpan max_ms_task_waiting_before_thread_spawn, uint max_queue_length_before_thread_spawn, 
+            TimeSpan max_boredom_time_before_thread_despawn )
+            : base()
+        {
+            Initialize();
+
+            minMsBetweenThreadSpawn = min_ms_between_thread_spawn;
+            maxQueueAgeInMsBeforeNewThread = max_ms_task_waiting_before_thread_spawn;
+            maxQueueLengthBeforeNewThread = max_queue_length_before_thread_spawn;
+            maxBoredomTimeBeforeThreadDespawn = max_boredom_time_before_thread_despawn;
+
+            for ( int i = 0; i < minThreads; i++ )
+                SpawnThread();
+        }
+
+        /// <summary>
+        /// Creates a very customized ThreadManager.
+        /// </summary>
+        /// <param name="min_threads">The minimum number of threads to have spawned at any time.</param>
+        /// <param name="max_threads">The maximum number of threads to have spawned in the pool. Dedicated threads may be spawned over the maximum.</param>
+        internal ThreadManager ( int min_threads, int max_threads )
+            : base()
+        {
+            Initialize();
+
+            minThreads = min_threads;
+            maxThreads = max_threads;
+
+            for ( int i = 0; i < minThreads; i++ )
+                SpawnThread();
+        }
+
+        /// <summary>
+        /// Creates a ThreadManager with all the defaults.
         /// </summary>
         internal ThreadManager ( )
             : base()
+        {
+            Initialize();
+
+            for ( int i = 0; i < minThreads; i++ )
+                SpawnThread();
+        }
+
+        /// <summary>
+        /// Initializes the basic options for the ThreadManager.
+        /// </summary>
+        private void Initialize()
         {
             waitingSpawns = new Queue<DateTime>();
             threads = new List<Thread>();
@@ -104,9 +182,6 @@ namespace HikariThreading
             numThreads = 0;
             lastThreadSpawn = DateTime.Now;
             lastNoBoredThreads = DateTime.Now;
-
-            for ( int i = 0; i < minThreads; i++ )
-                SpawnThread();
         }
 
         /// <summary>

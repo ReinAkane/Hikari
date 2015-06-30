@@ -14,13 +14,21 @@ namespace HikariThreading
     /// </summary>
     internal class UnityManager : ManagerBase
     {
-        internal UnityManager ( ) : base() { }
+        /// <summary>
+        /// Creates a new UnityManager with the specified maximum number of Tasks
+        /// to run in a single frame.
+        /// </summary>
+        /// <param name="max_tasks_in_a_frame">The maximum number of Tasks to run in a single frame. Default is infinite.</param>
+        internal UnityManager ( int max_tasks_in_a_frame = -1 ) : base() 
+        {
+            maxTasksInAFrame = max_tasks_in_a_frame;
+        }
 
         /// <summary>
         /// The maximum number of tasks to run in a single update.
         /// -1 = infinite.
         /// </summary>
-        int maxTasksInAFrame = -1;
+        int maxTasksInAFrame;
 
         /// <summary>
         /// Checks for napping and awaked tasks, and assigns work.
