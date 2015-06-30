@@ -26,7 +26,7 @@ namespace HikariThreading
         /// <param name="task">The task to run.</param>
         /// <param name="unity">Whether this Task will execute on Unity's thread.</param>
         /// <param name="cancel_extensions_on_abort">Whether or not it will automatically cancel all extensions when the Task is aborted.</param>
-        public ActionTask ( Action<ActionTask> task, bool unity, bool cancel_extensions_on_abort )
+        public ActionTask ( Action<ActionTask> task, bool unity, bool cancel_extensions_on_abort = true )
             : base(unity, cancel_extensions_on_abort)
         {
             extensions = new Queue<Action<ActionTask>>();

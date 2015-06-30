@@ -8,12 +8,37 @@ namespace HikariTests
     public class ActionTaskTests
     {
         [TestMethod]
+        public void CancelExtensionsOnAbortSets ( )
+        {
+            int i = 0;
+            ActionTask a = new ActionTask(( task ) => i = 1, false, true);
+            Assert.IsTrue(a.CancelExtensionsOnAbort);
+            a = new ActionTask(( task ) => i = 1, false, false);
+            Assert.IsFalse(a.CancelExtensionsOnAbort);
+        }
+
+        [TestMethod]
+        public void CanCancelExtensionsOnAbort ( )
+        {
+            int i = 0;
+            ActionTask b = new ActionTask(( task ) =>
+            {
+                i = 2;
+                task.Abort();
+            }, false, true);
+            b.Extend(( task ) => i = 4);
+            (b as ITask).Start();
+            Assert.AreEqual(2, i, "Task didn't correctly cancel extensions when aborted.");
+        }
+
+        [TestMethod]
         public void DoesTask ( )
         {
             int i = 0;
             ActionTask a = new ActionTask(( task ) => i = 1, false);
-            (a as ITask).Start();
+            bool result = (a as ITask).Start();
             Assert.AreEqual(1, i, "Looks like the task didn't execute when instantiated with an action.");
+            Assert.IsFalse(result, "Task reported it was sleeping after completing.");
         }
 
         [TestMethod]
@@ -54,14 +79,16 @@ namespace HikariTests
             ActionTask a = new ActionTask(( task ) => task.IsNapping = true, false);
             a.Extend(( task ) => i++);
             a.Extend(( task ) => i++);
-            (a as ITask).Start();
+            bool result = (a as ITask).Start();
             Assert.IsTrue(a.IsNapping, "Doesn't think it's napping...");
             Assert.IsFalse(a.IsCompleted, "Thinks its done while napping.");
             Assert.AreEqual(0, i, "Ran extensions while napping.");
+            Assert.IsTrue(result, "Didn't report it was napping.");
             a.IsNapping = false;
-            (a as ITask).Start();
+            result = (a as ITask).Start();
             Assert.AreEqual(2, i, "After napping didn't continue correctly.");
             Assert.IsTrue(a.IsCompleted, "Doesn't think its done after napping.");
+            Assert.IsFalse(result, "Reported it was still napping.");
         }
 
         [TestMethod]
@@ -75,7 +102,7 @@ namespace HikariTests
                     task.Extend(( task2 ) => i++);
                 });
             (a as ITask).Start();
-            Assert.AreEqual(3, i, "Looks like a continued task doesn't actually continue, when extended in the task.");
+            Assert.AreEqual(3, i, "Looks like an extended task doesn't actually continue, when extended in the task.");
         }
 
         [TestMethod]
@@ -113,35 +140,6 @@ namespace HikariTests
             a.Extend(( task ) => i = 3);
             (a as ITask).Start();
             Assert.AreEqual(1, i, "Task didn't correctly cancel extensions.");
-
-            ActionTask b = new ActionTask(( task ) =>
-            {
-                i = 2;
-                task.Abort();
-            }, false);
-            b.Extend(( task ) => i = 4);
-            b.CancelExtensionsOnAbort = true;
-            (b as ITask).Start();
-            Assert.AreEqual(2, i, "Task didn't correctly cancel extensions when aborted.");
-        }
-
-        [TestMethod]
-        public void CannotRunAfterAborting ( )
-        {
-            int i = 0;
-            ActionTask a = new ActionTask(( task ) => i = 1, false);
-            a.Abort();
-            Exception e = null;
-            try
-            {
-                (a as ITask).Start();
-            }
-            catch ( ActionTask.CannotStartException caught )
-            {
-                e = caught;
-            }
-            Assert.IsNotNull(e, "Started task without error after aborting.");
-            Assert.AreEqual(0, i, "Task ran even though it errored out.");
         }
 
         [TestMethod]

@@ -45,22 +45,27 @@ namespace HikariThreading
             if ( null != master )
                 throw new MultipleThreadClassesOnThread();
 
+            threadNum = ++numThreads;
+
             master = this;
             _lock = new object();
         }
 
+        static int numThreads = 0;
+        int threadNum;
         /// <summary>
         /// Pulls off the napper from this Thread and returns it.
         /// </summary>
         /// <returns>The Task on this thread.</returns>
-        internal ITask PullNapper()
+        internal ITask PullNapper ( )
         {
-            lock (_lock)
+            ITask result;
+            lock ( _lock )
             {
-                ITask result = task;
+                result = task;
                 task = null;
             }
-            return task;
+            return result;
         }
 
         /// <summary>
@@ -84,26 +89,35 @@ namespace HikariThreading
         {
             while ( run )
             {
-                // Run the task!
-                if ( Running && !Napping )
+                ITask t = null;
+                lock ( _lock )
                 {
-                    bool now_napping = task.Start();
+                    if ( task != null && !task.IsNapping )
+                        t = task;
+                }
+
+                // Run the task!
+                if ( t != null )
+                {
+                    bool now_napping = t.Start();
 
                     // Hold on to it if its napping, the ThreadManager will pull it off.
                     if ( !now_napping )
-                        lock(_lock) task = null;
+                        lock ( _lock ) task = null;
                 }
 
                 // Let another thread go. We need to wait for a new task anyway.
                 System.Threading.Thread.Sleep(0);
             }
+
+            run = true;
         }
 
         /// <summary>
         /// Stops this Thread from checking for tasks.
         /// Does NOT call Task.Abort();
         /// </summary>
-        internal void Stop()
+        internal void Stop ( )
         {
             run = false;
         }

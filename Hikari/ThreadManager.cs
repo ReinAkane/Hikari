@@ -12,7 +12,7 @@ namespace HikariThreading
     /// UnsafeUpdate must be called for ThreadManager to do any work,
     /// but ThreadManager will not call it.
     /// </summary>
-    internal class ThreadManager : ManagerBase
+    internal class ThreadManager : ManagerBase, IDisposable
     {
         /// <summary>
         /// The addition times of all Tasks in the waiting queue.
@@ -93,7 +93,7 @@ namespace HikariThreading
         /// <param name="max_queue_length_before_thread_spawn">The maximum number of Tasks waiting in queue before we spawn a new thread.</param>
         /// <param name="max_boredom_time_before_thread_despawn">The maximum amount of time a thread can be idle before despawning the thread.</param>
         internal ThreadManager ( int min_threads, int max_threads, TimeSpan min_ms_between_thread_spawn,
-            TimeSpan max_ms_task_waiting_before_thread_spawn, uint max_queue_length_before_thread_spawn, 
+            TimeSpan max_ms_task_waiting_before_thread_spawn, uint max_queue_length_before_thread_spawn,
             TimeSpan max_boredom_time_before_thread_despawn )
             : base()
         {
@@ -119,7 +119,7 @@ namespace HikariThreading
         /// <param name="max_queue_length_before_thread_spawn">The maximum number of Tasks waiting in queue before we spawn a new thread.</param>
         /// <param name="max_boredom_time_before_thread_despawn">The maximum amount of time a thread can be idle before despawning the thread.</param>
         internal ThreadManager ( TimeSpan min_ms_between_thread_spawn,
-            TimeSpan max_ms_task_waiting_before_thread_spawn, uint max_queue_length_before_thread_spawn, 
+            TimeSpan max_ms_task_waiting_before_thread_spawn, uint max_queue_length_before_thread_spawn,
             TimeSpan max_boredom_time_before_thread_despawn )
             : base()
         {
@@ -166,7 +166,7 @@ namespace HikariThreading
         /// <summary>
         /// Initializes the basic options for the ThreadManager.
         /// </summary>
-        private void Initialize()
+        private void Initialize ( )
         {
             waitingSpawns = new Queue<DateTime>();
             threads = new List<Thread>();
@@ -304,7 +304,7 @@ namespace HikariThreading
         /// <summary>
         /// Spawns a new thread and adds it to the thread pool.
         /// </summary>
-        private void SpawnThread ( )
+        internal void SpawnThread ( )
         {
             lastThreadSpawn = DateTime.Now;
             numThreads++;
@@ -422,6 +422,37 @@ namespace HikariThreading
             if ( !despawned )
                 throw new Exception("Tried to despawn a Thread but didn't find any bored ones. Is there a race condition?");
 #endif
+        }
+
+        /// <summary>
+        /// Waits for all Threads to spawn.
+        /// This is to make automated testing easier.
+        /// </summary>
+        internal void WaitForThreadSpawns ( )
+        {
+            while ( true )
+            {
+                lock ( threadLock )
+                    if ( numThreads == threads.Count )
+                        break;
+
+                System.Threading.Thread.Sleep(1);
+            }
+        }
+
+        /// <summary>
+        /// Tells all threads managed by this manager to stop running once
+        /// their Tasks finish up.
+        /// </summary>
+        public void Dispose ( )
+        {
+            lock ( threadLock )
+            {
+                foreach ( Thread thread in threads )
+                    thread.Stop();
+                foreach ( Thread thread in dedicatedThreads )
+                    thread.Stop();
+            }
         }
     }
 }

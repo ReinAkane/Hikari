@@ -94,7 +94,6 @@ namespace HikariThreading
             onUnityThread = unity;
         }
 
-        public class CannotStartException : Exception { internal CannotStartException ( string msg ) : base(msg) { } }
         /// <summary>
         /// Starts this task!
         /// </summary>

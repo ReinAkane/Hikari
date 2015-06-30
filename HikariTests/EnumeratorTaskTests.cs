@@ -23,7 +23,6 @@ namespace HikariTests
 
         System.Collections.IEnumerator SampleTaskWithYield(ITask waitfor)
         {
-            yield return null;
             i = 6;
             yield return waitfor;
             i++;
@@ -32,11 +31,21 @@ namespace HikariTests
         }
 
         [TestMethod]
+        public void CancelExtensionsOnAbortSets ( )
+        {
+            EnumeratorTask a = new EnumeratorTask(SampleTask(), false, true);
+            Assert.IsTrue(a.CancelExtensionsOnAbort);
+            a = new EnumeratorTask(SampleTask(), false, false);
+            Assert.IsFalse(a.CancelExtensionsOnAbort);
+        }
+
+        [TestMethod]
         public void DoesTask ( )
         {
             EnumeratorTask a = new EnumeratorTask(SampleTask(), false);
-            (a as ITask).Start();
+            bool result = (a as ITask).Start();
             Assert.AreEqual(5, i, "Looks like the task didn't execute when instantiated with an Enumerator.");
+            Assert.IsFalse(result, "Reported that it was napping when it completed.");
         }
 
         [TestMethod]
@@ -72,13 +81,55 @@ namespace HikariTests
         {
             ActionTask t = new ActionTask(( _ ) => System.Threading.Thread.Sleep(0), false);
             EnumeratorTask a = new EnumeratorTask(SampleTaskWithYield(t), false);
-            (a as ITask).Start();
+            bool result = (a as ITask).Start();
+            Assert.IsTrue(a.IsNapping, "Doesn't think it's napping...");
+            Assert.IsFalse(a.IsCompleted, "Thinks its done while napping.");
+            Assert.IsTrue(result, "Reported it was completed while napping.");
+            Assert.AreEqual(6, i, "Ran extensions while napping or didn't run start before napping.");
+            (t as ITask).Start();
+            result = (a as ITask).Start();
+            Assert.AreEqual(8, i, "After napping didn't continue correctly.");
+            Assert.IsFalse(result, "Reported it was still napping once finished.");
+            Assert.IsTrue(a.IsCompleted, "Doesn't think its done after napping.");
+        }
+
+        [TestMethod]
+        public void DoesNotForceAwakeByDefault ( )
+        {
+            ActionTask t = new ActionTask(( _ ) => System.Threading.Thread.Sleep(0), false);
+            EnumeratorTask a = new EnumeratorTask(SampleTaskWithYield(t), false);
+            bool result = (a as ITask).Start();
             Assert.IsTrue(a.IsNapping, "Doesn't think it's napping...");
             Assert.IsFalse(a.IsCompleted, "Thinks its done while napping.");
             Assert.AreEqual(6, i, "Ran extensions while napping or didn't run start before napping.");
+            a.IsNapping = false;
+            Assert.IsTrue(a.IsNapping, "Forced awake by default.");
             (t as ITask).Start();
-            (a as ITask).Start();
+            result = (a as ITask).Start();
             Assert.AreEqual(8, i, "After napping didn't continue correctly.");
+            Assert.IsFalse(result, "Reported it was still napping once finished.");
+            Assert.IsTrue(a.IsCompleted, "Doesn't think its done after napping.");
+        }
+
+        [TestMethod]
+        public void CanSetToNapWhileWaiting ( )
+        {
+            ActionTask t = new ActionTask(( _ ) => System.Threading.Thread.Sleep(0), false);
+            EnumeratorTask a = new EnumeratorTask(SampleTaskWithYield(t), false);
+            bool result = (a as ITask).Start();
+            Assert.IsTrue(a.IsNapping, "Doesn't think it's napping...");
+            Assert.IsFalse(a.IsCompleted, "Thinks its done while napping.");
+            Assert.AreEqual(6, i, "Ran extensions while napping or didn't run start before napping.");
+            a.IsNapping = true;
+            (t as ITask).Start();
+            result = (a as ITask).Start();
+            Assert.IsFalse(a.IsCompleted, "Thinks its done while napping.");
+            Assert.AreEqual(6, i, "Ran extensions while napping or didn't run start before napping.");
+            Assert.IsTrue(a.IsNapping, "Doesn't think it's napping...");
+            a.IsNapping = false;
+            result = (a as ITask).Start();
+            Assert.AreEqual(8, i, "After napping didn't continue correctly.");
+            Assert.IsFalse(result, "Reported it was still napping once finished.");
             Assert.IsTrue(a.IsCompleted, "Doesn't think its done after napping.");
         }
 
@@ -91,7 +142,7 @@ namespace HikariTests
             Assert.IsTrue(a.IsNapping, "Doesn't think it's napping...");
             Assert.IsFalse(a.IsCompleted, "Thinks its done while napping.");
             Assert.AreEqual(6, i, "Ran extensions while napping or didn't run start before napping.");
-            a.IsNapping = false;
+            a.ForceAwaken();
             (a as ITask).Start();
             Assert.AreEqual(8, i, "After napping didn't continue correctly.");
             Assert.IsTrue(a.IsCompleted, "Doesn't think its done after napping.");

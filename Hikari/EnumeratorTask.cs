@@ -38,7 +38,7 @@ namespace HikariThreading
         /// </summary>
         ITask napUntilComplete = null;
 
-        internal EnumeratorTask ( IEnumerator action, bool unity, bool cancel_extensions_on_abort )
+        internal EnumeratorTask ( IEnumerator action, bool unity, bool cancel_extensions_on_abort = true )
             : base(unity, cancel_extensions_on_abort)
         {
             extensions = new System.Collections.Generic.Queue<IEnumerator>();
