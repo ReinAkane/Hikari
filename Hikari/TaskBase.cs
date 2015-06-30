@@ -35,6 +35,11 @@ namespace HikariThreading
         protected volatile bool aborted;
 
         /// <summary>
+        /// Whether or not this task is on a dedicated thread.
+        /// </summary>
+        protected volatile bool isDedicated;
+
+        /// <summary>
         /// Whether or not this task is on Unity's thread.
         /// </summary>
         protected volatile bool onUnityThread;
@@ -69,9 +74,14 @@ namespace HikariThreading
         /// Completed tasks cannot be modified or run.
         /// 
         /// Instead of using IsCompleted to decide whether to extend a Task, use
-        /// TryExtend (which returns false if the task couldn't be extended).
+        /// TryExtend (which returns false if the task had completed).
         /// </summary>
         public bool IsCompleted { get { return isCompleted; } }
+
+        /// <summary>
+        /// Whether or not the Task is a dedicated Task.
+        /// </summary>
+        public bool IsDedicated { get { return isDedicated; } }
 
         /// <summary>
         /// Whether or not to automatically cancel all extensions on Abort().
@@ -84,7 +94,7 @@ namespace HikariThreading
         /// Creates a new task with the passed action as the task to run.
         /// </summary>
         /// <param name="unity">Whether this Task will execute on Unity's thread.</param>
-        internal TaskBase ( bool unity, bool cancel_extensions_on_abort )
+        internal TaskBase ( bool unity, bool cancel_extensions_on_abort, bool is_dedicated = false )
         {
             _lock = new object();
             isCompleted = false;
@@ -92,6 +102,7 @@ namespace HikariThreading
             napping = false;
             cancelExtensionsOnAbort = cancel_extensions_on_abort;
             onUnityThread = unity;
+            isDedicated = is_dedicated;
         }
 
         /// <summary>
@@ -99,6 +110,9 @@ namespace HikariThreading
         /// </summary>
         bool ITask.Start ( )
         {
+            // Not completed no more!
+            isCompleted = false;
+
             // Run the task
             bool now_napping = StartTask();
 
@@ -141,12 +155,33 @@ namespace HikariThreading
         /// Extends the Task to do the passed action. The new action will
         /// execute on the same Thread as the rest of the Task.
         /// 
+        /// If the Task has already completed, or was aborted, this will
+        /// restart the Task (on its old Thread) with the new extension.
+        /// </summary>
+        /// <param name="next">The next action to do.</param>
+        /// <returns>True if the Task was still running.</returns>
+        public bool Extend ( T next )
+        {
+            lock ( _lock )
+            {
+                InternalExtend(next);
+                if ( !isCompleted && !aborted )
+                    return true;
+            }
+            Hikari.RequeueTask(this);
+            return false;
+        }
+
+        /// <summary>
+        /// Extends the Task to do the passed action. The new action will
+        /// execute on the same Thread as the rest of the Task.
+        /// 
         /// If the Task has already completed, or was aborted, this will simply
         /// return false.
         /// </summary>
         /// <param name="next">The next action to do.</param>
         /// <returns>Whether or not the task was successfully extended.</returns>
-        public bool Extend ( T next )
+        public bool TryExtend ( T next )
         {
             lock ( _lock )
             {

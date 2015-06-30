@@ -38,8 +38,8 @@ namespace HikariThreading
         /// </summary>
         ITask napUntilComplete = null;
 
-        internal EnumeratorTask ( IEnumerator action, bool unity, bool cancel_extensions_on_abort = true )
-            : base(unity, cancel_extensions_on_abort)
+        internal EnumeratorTask ( IEnumerator action, bool unity, bool cancel_extensions_on_abort = true, bool is_dedicated = false )
+            : base(unity, cancel_extensions_on_abort, is_dedicated)
         {
             extensions = new System.Collections.Generic.Queue<IEnumerator>();
             extensions.Enqueue(action);
@@ -110,7 +110,7 @@ namespace HikariThreading
             {
                 // Make sure they don't wait for themselves
                 if ( task == this ) throw new CannotWaitForSelfException("A Task cannot wait for itself to finish.");
-                
+
                 lock ( _lock )
                     napUntilComplete = task;
                 return;
@@ -162,7 +162,7 @@ namespace HikariThreading
             set
             {
                 base.IsNapping = value;
-                
+
             }
         }
 
@@ -170,7 +170,7 @@ namespace HikariThreading
         /// Forces the Task awake, even if it was waiting for another Task to
         /// finish.
         /// </summary>
-        public void ForceAwaken()
+        public void ForceAwaken ( )
         {
             lock ( _lock ) napUntilComplete = null;
             IsNapping = false;

@@ -32,8 +32,12 @@ namespace HikariThreading
     /// is the lowest level they have access to and contains method declarations for
     /// all the methods they will use, but many of those methods are defined in
     /// ActionTask and EnumeratorTask.
-    public class Hikari : UnityEngine.MonoBehaviour
+    public class Hikari
+#if !NO_UNITY
+        : UnityEngine.MonoBehaviour
+#endif
     {
+#if !NO_UNITY
         /// <summary>
         /// Starts up Hikari with all the default options. Not
         /// necessary to call, but if you don't a GameObject will be
@@ -155,7 +159,7 @@ namespace HikariThreading
         /// This does the reusable parts of the overloaded Spawn() method.
         /// </summary>
         /// <returns>The spawned game object for Hikari.</returns>
-        private static UnityEngine.GameObject StartSpawn()
+        private static UnityEngine.GameObject StartSpawn ( )
         {
             // Error if hikari exists
             if ( hikari != null )
@@ -168,6 +172,20 @@ namespace HikariThreading
 
             return obj;
         }
+#else // Allow us to test without Unity3D
+        public static void Spawn()
+        {
+            // Error if hikari exists
+            if ( hikari != null )
+                throw new Exception("Cannot spawn a second Hikari instance.");
+
+            hikari = new Hikari();
+
+            // Instantiate hikari
+            hikari.threadManager = new ThreadManager();
+            hikari.unityManager = new UnityManager();
+        }
+#endif
 
         /// <summary>
         /// Failsafe so that no one accidentally creates a Hikari object.
@@ -191,8 +209,10 @@ namespace HikariThreading
         /// <summary>
         /// The single instance of Hikari in existence.
         /// Will spawn one if there isn't one yet.
+        /// 
+        /// This is internal to allow the tests to access it.
         /// </summary>
-        private static Hikari Instance
+        internal static Hikari Instance
         {
             get
             {
@@ -273,7 +293,7 @@ namespace HikariThreading
         /// <returns>The task that was added.</returns>
         public static EnumeratorTask ScheduleUnity ( System.Collections.IEnumerator to_schedule, bool cancel_extensions_on_abort = true )
         {
-            EnumeratorTask t = new EnumeratorTask(to_schedule, false, cancel_extensions_on_abort);
+            EnumeratorTask t = new EnumeratorTask(to_schedule, true, cancel_extensions_on_abort);
             Instance.unityManager.EnqueueTask(t);
             return t;
         }
@@ -292,7 +312,7 @@ namespace HikariThreading
         /// <returns>The new dedicated task.</returns>
         public static ActionTask SpawnDedicatedTask ( Action<ActionTask> task, bool cancel_extensions_on_abort = true )
         {
-            ActionTask t = new ActionTask(task, true, cancel_extensions_on_abort);
+            ActionTask t = new ActionTask(task, false, cancel_extensions_on_abort, true);
             Instance.threadManager.SpawnDedicatedThread(t);
             return t;
         }
@@ -314,15 +334,30 @@ namespace HikariThreading
         /// <returns>The new dedicated task.</returns>
         public static EnumeratorTask SpawnDedicatedTask ( System.Collections.IEnumerator task, bool cancel_extensions_on_abort = true )
         {
-            EnumeratorTask t = new EnumeratorTask(task, true, cancel_extensions_on_abort);
+            EnumeratorTask t = new EnumeratorTask(task, false, cancel_extensions_on_abort, true);
             Instance.threadManager.SpawnDedicatedThread(t);
             return t;
         }
 
         /// <summary>
+        /// Re-enters the passed Task into the Thread- or UnityManager
+        /// (based on which it started in).
+        /// This should only be called when the Task is already completed.
+        /// </summary>
+        /// <param name="task">The Task to requeue.</param>
+        internal static void RequeueTask ( ITask task )
+        {
+            if ( task.OnUnityThread )
+                Instance.unityManager.EnqueueTask(task);
+            else if ( task.IsDedicated )
+                Instance.threadManager.SpawnDedicatedThread(task);
+            else Instance.threadManager.EnqueueTask(task);
+        }
+
+        /// <summary>
         /// Unity's update loop. All we need to do is update the managers.
         /// </summary>
-        void Update ( )
+        internal void Update ( )
         {
             // Maybe the threadManager should be moved to its own thread.
             threadManager.UnsafeUpdate();

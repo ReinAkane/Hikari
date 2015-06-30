@@ -31,5 +31,16 @@ namespace HikariThreading
         /// until something awakens it.
         /// </summary>
         bool IsNapping { get; }
+
+        /// <summary>
+        /// Returns true if the task is known to be on Unity's thread.
+        /// If false, assume the task is not on Unity's thread.
+        /// </summary>
+        bool OnUnityThread { get; }
+
+        /// <summary>
+        /// Returns true if the task was created as a dedicated task.
+        /// </summary>
+        bool IsDedicated { get; }
     }
 }
