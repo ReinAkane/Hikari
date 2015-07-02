@@ -36,7 +36,7 @@ namespace HikariThreading
         /// 
         /// Forcefully waking this task will override this.
         /// </summary>
-        ITask napUntilComplete = null;
+        ICompletable napUntilComplete = null;
 
         internal EnumeratorTask ( IEnumerator action, bool unity, bool cancel_extensions_on_abort = true, bool is_dedicated = false )
             : base(unity, cancel_extensions_on_abort, is_dedicated)
@@ -94,6 +94,9 @@ namespace HikariThreading
         {
             internal CouldNotHandleYieldException ( string msg ) : base(msg) { }
         }
+        /// <summary>
+        /// Thrown when an EnumeratorTask was told to wait for itself to complete.
+        /// </summary>
         public class CannotWaitForSelfException : Exception
         {
             internal CannotWaitForSelfException ( string msg ) : base(msg) { }
@@ -105,7 +108,7 @@ namespace HikariThreading
         /// <param name="result">The object returned.</param>
         private void HandleYield ( object result )
         {
-            ITask task = result as ITask;
+            ICompletable task = result as ICompletable;
             if ( task != null )
             {
                 // Make sure they don't wait for themselves
@@ -118,7 +121,7 @@ namespace HikariThreading
 
             // Add expected classes
             throw new CouldNotHandleYieldException("Could not handle yielded object " + result.ToString() + " of type " + result.GetType().Name +
-                ".\nYou can yield null, or a TaskBase object.");
+                ".\nYou can yield null, or an ICompletable object.");
         }
 
         /// <summary>

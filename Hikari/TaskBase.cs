@@ -115,6 +115,8 @@ namespace HikariThreading
         /// Creates a new task with the passed action as the task to run.
         /// </summary>
         /// <param name="unity">Whether this Task will execute on Unity's thread.</param>
+        /// <param name="cancel_extensions_on_abort">Whether this Task will automatically cancel its extensions on Abort().</param>
+        /// <param name="is_dedicated">Whether this Task will execute on a dedicated thread.</param>
         internal TaskBase ( bool unity, bool cancel_extensions_on_abort, bool is_dedicated = false )
         {
             _lock = new object();

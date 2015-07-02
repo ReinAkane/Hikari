@@ -10,7 +10,7 @@ namespace HikariThreading
     /// on tasks that Hikari will use natively. Methods for the user's use are
     /// in TaskBase.
     /// </summary>
-    internal interface ITask
+    internal interface ITask : ICompletable
     {
         /// <summary>
         /// Starts the Task.

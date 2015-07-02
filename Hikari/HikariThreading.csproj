@@ -50,8 +50,10 @@
   <ItemGroup>
     <Compile Include="EnumeratorTask.cs" />
     <Compile Include="Hikari.cs" />
+    <Compile Include="ICompletable.cs" />
     <Compile Include="ITask.cs" />
     <Compile Include="ManagerBase.cs" />
+    <Compile Include="NapForSeconds.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ActionTask.cs" />
     <Compile Include="TaskBase.cs" />
